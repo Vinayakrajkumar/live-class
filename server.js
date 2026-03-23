@@ -19,15 +19,24 @@ const API_URL =
 const API_KEY =
 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MTcxNjE0OGQyZDk2MGQzZmVhZjNmMSIsIm5hbWUiOiJCWFEgPD4gTWlnaHR5IEh1bmRyZWQgVGVjaG5vbG9naWVzIFB2dCBMdGQiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjkxNzE2MTQ4ZDJkOTYwZDNmZWFmM2VhIiwiYWN0aXZlUGxhbiI6Ik5PTkUiLCJpYXQiOjE3NjMxMjA2NjB9.8jOtIkz5c455LWioAa7WNzvjXlqCN564TzM12yQQ5Cw";
 
-// Your Google Sheet Script
+// Google Sheet API
 const GOOGLE_SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbxTSQgkZQOMZH9dHBP-ehP42Nuu5vjcZRMig0wacg_TOrxHdv6PFecFC2xiw4IXw3id/exec";
+
 
 /* ===============================
    OTP STORAGE
 =============================== */
 
 let otpStore = {};
+
+
+/* ===============================
+   LIVE CLASS STORAGE
+=============================== */
+
+let liveClassLink = "";
+
 
 /* ===============================
    GENERATE OTP
@@ -41,8 +50,9 @@ return Math.floor(
 
 }
 
+
 /* ===============================
-   CHECK NUMBER API
+   CHECK NUMBER
 =============================== */
 
 app.get("/check-number", async (req, res) => {
@@ -87,6 +97,7 @@ error: "Sheet check failed"
 
 });
 
+
 /* ===============================
    SEND OTP
 =============================== */
@@ -97,7 +108,7 @@ const { phoneNumber } = req.body;
 
 try {
 
-/* Check phone first */
+/* Check number */
 
 const checkResponse =
 await axios.get(
@@ -130,7 +141,7 @@ otpStore[phoneNumber] = {
 otp: otpCode,
 
 expiry:
-Date.now() + 60000 // 60 sec
+Date.now() + 60000
 
 };
 
@@ -186,7 +197,7 @@ FirstName: "user"
 
 };
 
-/* Send WhatsApp OTP */
+/* Send WhatsApp */
 
 await axios.post(
 
@@ -230,6 +241,7 @@ message: "Failed to send OTP"
 }
 
 });
+
 
 /* ===============================
    VERIFY OTP
@@ -285,7 +297,7 @@ message: "Invalid OTP"
 
 }
 
-/* Success */
+/* SUCCESS */
 
 delete otpStore[phoneNumber];
 
@@ -297,6 +309,91 @@ message: "Login successful"
 });
 
 });
+
+
+/* ===============================
+   SET LIVE CLASS (ADMIN)
+=============================== */
+
+app.post("/set-class", (req, res) => {
+
+const { link } = req.body;
+
+if (!link) {
+
+return res.json({
+success: false,
+message: "No link provided"
+});
+
+}
+
+liveClassLink = link;
+
+console.log(
+"Live class started:",
+link
+);
+
+res.json({
+
+success: true,
+message: "Class started"
+
+});
+
+});
+
+
+/* ===============================
+   GET LIVE CLASS (STUDENT)
+=============================== */
+
+app.get("/get-class", (req, res) => {
+
+res.json({
+
+link: liveClassLink
+
+});
+
+});
+
+
+/* ===============================
+   STOP LIVE CLASS
+=============================== */
+
+app.post("/stop-class", (req, res) => {
+
+liveClassLink = "";
+
+console.log(
+"Live class stopped"
+);
+
+res.json({
+
+success: true,
+message: "Class stopped"
+
+});
+
+});
+
+
+/* ===============================
+   ROOT CHECK
+=============================== */
+
+app.get("/", (req, res) => {
+
+res.send(
+"Server running successfully"
+);
+
+});
+
 
 /* ===============================
    START SERVER
