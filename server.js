@@ -17,7 +17,7 @@ const API_URL =
 
 // Your API Key
 const API_KEY =
-"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MTcxNjE0OGQyZDk2MGQzZmVhZjNmMSIsIm5hbWUiOiJCWFEgPD4gTWlnaHR5IEh1bmRyZWQgVGVjaG5vbG9naWVzIFB2dCBMdGQiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjkxNzE2MTQ4ZDJkOTYwZDNmZWFmM2VhIiwiYWN0aXZlUGxhbiI6Ik5PTkUiLCJpYXQiOjE3NjMxMjA2NjB9.8jOtIkz5c455LWioAa7WNzvjXlqCN564TzM12yQQ5Cw";
+"YOUR_API_KEY";
 
 // Google Sheet API
 const GOOGLE_SCRIPT_URL =
@@ -29,6 +29,13 @@ const GOOGLE_SCRIPT_URL =
 =============================== */
 
 let otpStore = {};
+
+
+/* ===============================
+   DEVICE STORAGE (NEW)
+=============================== */
+
+let deviceStore = {};
 
 
 /* ===============================
@@ -108,8 +115,6 @@ const { phoneNumber } = req.body;
 
 try {
 
-/* Check number */
-
 const checkResponse =
 await axios.get(
 GOOGLE_SCRIPT_URL +
@@ -144,6 +149,7 @@ expiry:
 Date.now() + 60000
 
 };
+
 
 /* WhatsApp Payload */
 
@@ -197,6 +203,7 @@ FirstName: "user"
 
 };
 
+
 /* Send WhatsApp */
 
 await axios.post(
@@ -244,7 +251,7 @@ message: "Failed to send OTP"
 
 
 /* ===============================
-   VERIFY OTP
+   VERIFY OTP (UPDATED)
 =============================== */
 
 app.post("/verify-otp", (req, res) => {
@@ -252,7 +259,8 @@ app.post("/verify-otp", (req, res) => {
 const {
 
 phoneNumber,
-otp
+otp,
+deviceId
 
 } = req.body;
 
@@ -297,6 +305,12 @@ message: "Invalid OTP"
 
 }
 
+
+/* SAVE DEVICE */
+
+deviceStore[phoneNumber] = deviceId;
+
+
 /* SUCCESS */
 
 delete otpStore[phoneNumber];
@@ -312,7 +326,38 @@ message: "Login successful"
 
 
 /* ===============================
-   SET LIVE CLASS (ADMIN)
+   CHECK DEVICE (NEW)
+=============================== */
+
+app.get("/check-device", (req,res)=>{
+
+const phone =
+req.query.phone;
+
+const device =
+req.query.deviceId;
+
+if(deviceStore[phone] !== device){
+
+return res.json({
+
+allowed:false
+
+});
+
+}
+
+res.json({
+
+allowed:true
+
+});
+
+});
+
+
+/* ===============================
+   SET LIVE CLASS
 =============================== */
 
 app.post("/set-class", (req, res) => {
@@ -346,7 +391,7 @@ message: "Class started"
 
 
 /* ===============================
-   GET LIVE CLASS (STUDENT)
+   GET LIVE CLASS
 =============================== */
 
 app.get("/get-class", (req, res) => {
