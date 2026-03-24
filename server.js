@@ -19,30 +19,18 @@ const API_URL =
 const API_KEY =
 "YOUR_API_KEY";
 
-// Google Sheet API
+// Google Sheet Script URL
 const GOOGLE_SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbxTSQgkZQOMZH9dHBP-ehP42Nuu5vjcZRMig0wacg_TOrxHdv6PFecFC2xiw4IXw3id/exec";
 
 
 /* ===============================
-   OTP STORAGE
+   STORAGE
 =============================== */
 
 let otpStore = {};
 
-
-/* ===============================
-   DEVICE STORAGE (NEW)
-=============================== */
-
 let deviceStore = {};
-
-
-/* ===============================
-   LIVE CLASS STORAGE
-=============================== */
-
-let liveClassLink = "";
 
 
 /* ===============================
@@ -115,6 +103,8 @@ const { phoneNumber } = req.body;
 
 try {
 
+/* CHECK NUMBER */
+
 const checkResponse =
 await axios.get(
 GOOGLE_SCRIPT_URL +
@@ -130,7 +120,8 @@ message: "Login not available"
 
 }
 
-/* Generate OTP */
+
+/* GENERATE OTP */
 
 const otpCode =
 generateOTP();
@@ -139,7 +130,8 @@ console.log(
 `Generated OTP ${otpCode} for ${phoneNumber}`
 );
 
-/* Store OTP */
+
+/* STORE OTP */
 
 otpStore[phoneNumber] = {
 
@@ -151,7 +143,7 @@ Date.now() + 60000
 };
 
 
-/* WhatsApp Payload */
+/* SEND WHATSAPP */
 
 const payload = {
 
@@ -204,8 +196,6 @@ FirstName: "user"
 };
 
 
-/* Send WhatsApp */
-
 await axios.post(
 
 API_URL,
@@ -251,7 +241,7 @@ message: "Failed to send OTP"
 
 
 /* ===============================
-   VERIFY OTP (UPDATED)
+   VERIFY OTP + SAVE DEVICE
 =============================== */
 
 app.post("/verify-otp", (req, res) => {
@@ -308,7 +298,71 @@ message: "Invalid OTP"
 
 /* SAVE DEVICE */
 
-deviceStore[phoneNumber] = deviceId;
+deviceStore[phoneNumber] = {
+
+deviceId: deviceId,
+
+loginTime:
+new Date().toLocaleString(),
+
+userAgent:
+req.headers["user-agent"],
+
+ip:
+req.headers["x-forwarded-for"] ||
+req.socket.remoteAddress
+
+};
+
+
+/* DEVICE TYPE DETECTION */
+
+let agent =
+req.headers["user-agent"];
+
+let deviceType =
+agent.includes("Android")
+? "Android Mobile"
+: agent.includes("iPhone")
+? "iPhone"
+: agent.includes("Windows")
+? "Windows PC"
+: agent.includes("Mac")
+? "Mac"
+: "Unknown Device";
+
+
+/* LOG INFO */
+
+console.log("========== LOGIN ==========");
+
+console.log(
+"Phone:",
+phoneNumber
+);
+
+console.log(
+"Device:",
+deviceType
+);
+
+console.log(
+"Browser:",
+agent
+);
+
+console.log(
+"IP:",
+req.headers["x-forwarded-for"] ||
+req.socket.remoteAddress
+);
+
+console.log(
+"Time:",
+new Date().toLocaleString()
+);
+
+console.log("===========================");
 
 
 /* SUCCESS */
@@ -326,7 +380,7 @@ message: "Login successful"
 
 
 /* ===============================
-   CHECK DEVICE (NEW)
+   CHECK DEVICE (ONE DEVICE LOGIN)
 =============================== */
 
 app.get("/check-device", (req,res)=>{
@@ -337,7 +391,7 @@ req.query.phone;
 const device =
 req.query.deviceId;
 
-if(deviceStore[phone] !== device){
+if(deviceStore[phone]?.deviceId !== device){
 
 return res.json({
 
@@ -357,72 +411,43 @@ allowed:true
 
 
 /* ===============================
-   SET LIVE CLASS
+   GET LIVE CLASS FROM SHEET2
 =============================== */
 
-app.post("/set-class", (req, res) => {
+app.get("/get-class", async (req, res) => {
 
-const { link } = req.body;
+try {
 
-if (!link) {
+const response =
+await axios.get(
+GOOGLE_SCRIPT_URL
+);
 
-return res.json({
-success: false,
-message: "No link provided"
+/* RETURNS link FROM Sheet2 */
+
+res.json({
+
+link:
+response.data.link
+
 });
 
 }
 
-liveClassLink = link;
+catch(error){
 
-console.log(
-"Live class started:",
-link
+console.error(
+"Live class sheet error:",
+error.message
 );
 
 res.json({
 
-success: true,
-message: "Class started"
+link: ""
 
 });
 
-});
-
-
-/* ===============================
-   GET LIVE CLASS
-=============================== */
-
-app.get("/get-class", (req, res) => {
-
-res.json({
-
-link: liveClassLink
-
-});
-
-});
-
-
-/* ===============================
-   STOP LIVE CLASS
-=============================== */
-
-app.post("/stop-class", (req, res) => {
-
-liveClassLink = "";
-
-console.log(
-"Live class stopped"
-);
-
-res.json({
-
-success: true,
-message: "Class stopped"
-
-});
+}
 
 });
 
