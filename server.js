@@ -21,7 +21,7 @@ const API_KEY =
 
 // Google Sheet Script URL
 const GOOGLE_SCRIPT_URL =
-"https://script.google.com/macros/s/AKfycbxTSQgkZQOMZH9dHBP-ehP42Nuu5vjcZRMig0wacg_TOrxHdv6PFecFC2xiw4IXw3id/exec";
+"https://script.google.com/macros/s/AKfycbyb0s5esFHMH5_qwWHV2yZQs_FddoZWBzjEhrvMtNlX0Mtnkm-yUC-NMVoUlX5LPz7_/exec";
 
 
 /* ===============================
