@@ -8,17 +8,21 @@ app.use(express.json());
 app.use(cors());
 
 /* ===============================
-   CONFIG
+   CONFIGURATION
 =============================== */
 
+// WhatsApp API
 const API_URL =
 "https://backend.api-wa.co/campaign/neodove/api/v2";
 
+// 🔴 PUT YOUR NEW API KEY HERE
 const API_KEY =
-"YOUR_API_KEY_HERE";
+"PUT_NEW_API_KEY_HERE";
 
+// Google Sheet Script URL
 const GOOGLE_SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbzP0-EFmdkhRBs9DiT7PJUPHk_qfIR88vPyFl_0VQvcFKc2wsurlbSmNDodpha3JpOy/exec";
+
 
 /* ===============================
    STORAGE
@@ -27,27 +31,66 @@ const GOOGLE_SCRIPT_URL =
 let otpStore = {};
 let deviceStore = {};
 
+
 /* ===============================
    GENERATE OTP
 =============================== */
 
-function generateOTP(){
+function generateOTP() {
 
 return Math.floor(
-100000 + Math.random()*900000
+100000 + Math.random() * 900000
 ).toString();
 
 }
 
+
 /* ===============================
-   SEND OTP (FAST VERSION)
+   CHECK NUMBER
 =============================== */
 
-app.post("/send-otp", async (req,res)=>{
+app.get("/check-number", async (req, res) => {
+
+const phone = req.query.phone;
+
+try {
+
+const response =
+await axios.get(
+GOOGLE_SCRIPT_URL + "?phone=" + phone
+);
+
+res.json({
+allowed: response.data === "allowed"
+});
+
+}
+
+catch (error) {
+
+console.error(
+"Sheet error:",
+error.message
+);
+
+res.status(500).json({
+error: "Sheet check failed"
+});
+
+}
+
+});
+
+
+/* ===============================
+   SEND OTP (FAST + FIXED)
+=============================== */
+
+app.post("/send-otp", async (req, res) => {
 
 const { phoneNumber } = req.body;
 
-try{
+try {
 
 /* CHECK NUMBER */
 
@@ -57,14 +100,15 @@ GOOGLE_SCRIPT_URL +
 "?phone=" + phoneNumber
 );
 
-if(checkResponse.data !== "allowed"){
+if (checkResponse.data !== "allowed") {
 
 return res.json({
-success:false,
-message:"Login not available"
+success: false,
+message: "Login not available"
 });
 
 }
+
 
 /* GENERATE OTP */
 
@@ -75,67 +119,246 @@ console.log(
 `Generated OTP ${otpCode} for ${phoneNumber}`
 );
 
+
 /* STORE OTP */
 
-otpStore[phoneNumber]={
+otpStore[phoneNumber] = {
 
 otp: otpCode,
-expiry: Date.now()+60000
+
+expiry:
+Date.now() + 60000
 
 };
 
-/* SEND RESPONSE FIRST ⚡ */
+
+/* SEND RESPONSE IMMEDIATELY ⚡ */
 
 res.json({
 
-success:true,
-message:"OTP sending"
+success: true,
+message: "OTP sending"
 
 });
 
 
-/* SEND WHATSAPP IN BACKGROUND */
+/* ===============================
+   SEND WHATSAPP (BACKGROUND)
+=============================== */
 
-const payload={
+const payload = {
 
-apiKey:API_KEY,
+apiKey: API_KEY,
 
-campaignName:"OTP5",
+campaignName: "OTP5",
 
-destination:phoneNumber,
+destination: phoneNumber,
 
-userName:"Student",
+userName: "Student",
 
-templateParams:[
+templateParams: [
 otpCode
 ],
 
-source:"login-system"
+source: "login-system"
 
 };
 
-/* NO AWAIT HERE ⚡ */
+
+/* SEND WITHOUT WAIT ⚡ */
 
 axios.post(
-
 API_URL,
 payload,
 {
-headers:{
-"Content-Type":"application/json"
+headers: {
+"Content-Type":
+"application/json"
 }
 }
+)
 
-).then(()=>{
+.then(response => {
 
-console.log("OTP sent successfully");
+console.log(
+"✅ OTP sent:",
+response.data
+);
 
-}).catch(err=>{
+})
+
+.catch(error => {
 
 console.error(
-"OTP send error:",
-err.message
+"❌ OTP error:",
+error.response
+? error.response.data
+: error.message
 );
+
+});
+
+}
+
+catch (error) {
+
+console.error(
+"Send OTP error:",
+error.message
+);
+
+res.status(500).json({
+
+success: false,
+message: "Failed to send OTP"
+
+});
+
+}
+
+});
+
+
+/* ===============================
+   VERIFY OTP
+=============================== */
+
+app.post("/verify-otp", (req, res) => {
+
+const {
+
+phoneNumber,
+otp,
+deviceId
+
+} = req.body;
+
+const storedData =
+otpStore[phoneNumber];
+
+if (!storedData) {
+
+return res.json({
+
+success: false,
+message: "OTP not found"
+
+});
+
+}
+
+if (
+Date.now() >
+storedData.expiry
+) {
+
+delete otpStore[phoneNumber];
+
+return res.json({
+
+success: false,
+message: "OTP expired"
+
+});
+
+}
+
+if (storedData.otp !== otp) {
+
+return res.json({
+
+success: false,
+message: "Invalid OTP"
+
+});
+
+}
+
+
+/* SAVE DEVICE */
+
+deviceStore[phoneNumber] = {
+
+deviceId: deviceId,
+
+loginTime:
+new Date().toLocaleString()
+
+};
+
+
+/* LOG LOGIN */
+
+console.log("========== LOGIN ==========");
+
+console.log("Phone:", phoneNumber);
+
+console.log("Device ID:", deviceId);
+
+console.log("Time:",
+new Date().toLocaleString());
+
+console.log("===========================");
+
+
+/* SUCCESS */
+
+delete otpStore[phoneNumber];
+
+res.json({
+
+success: true,
+message: "Login successful"
+
+});
+
+});
+
+
+/* ===============================
+   CHECK DEVICE
+=============================== */
+
+app.get("/check-device", (req,res)=>{
+
+const phone =
+req.query.phone;
+
+const device =
+req.query.deviceId;
+
+if(deviceStore[phone]?.deviceId !== device){
+
+return res.json({
+allowed:false
+});
+
+}
+
+res.json({
+allowed:true
+});
+
+});
+
+
+/* ===============================
+   GET LIVE CLASS
+=============================== */
+
+app.get("/get-class", async (req, res) => {
+
+try {
+
+const response =
+await axios.get(
+GOOGLE_SCRIPT_URL
+);
+
+res.json({
+
+link:
+response.data.link || ""
 
 });
 
@@ -144,94 +367,24 @@ err.message
 catch(error){
 
 console.error(
-"Error sending OTP:",
+"Live class error:",
 error.message
 );
 
-res.status(500).json({
-
-success:false,
-message:"Failed to send OTP"
-
-});
-
-}
-
-});
-
-/* ===============================
-   VERIFY OTP
-=============================== */
-
-app.post("/verify-otp",(req,res)=>{
-
-const {
-phoneNumber,
-otp,
-deviceId
-}=req.body;
-
-const storedData=
-otpStore[phoneNumber];
-
-if(!storedData){
-
-return res.json({
-success:false,
-message:"OTP not found"
-});
-
-}
-
-if(Date.now()>storedData.expiry){
-
-delete otpStore[phoneNumber];
-
-return res.json({
-success:false,
-message:"OTP expired"
-});
-
-}
-
-if(storedData.otp!==otp){
-
-return res.json({
-success:false,
-message:"Invalid OTP"
-});
-
-}
-
-/* SAVE DEVICE */
-
-deviceStore[phoneNumber]={
-
-deviceId:deviceId,
-
-loginTime:
-new Date().toLocaleString()
-
-};
-
-/* SUCCESS */
-
-delete otpStore[phoneNumber];
-
 res.json({
+link: ""
+});
 
-success:true,
-message:"Login successful"
+}
 
 });
 
-});
 
 /* ===============================
-   ROOT
+   ROOT CHECK
 =============================== */
 
-app.get("/",(req,res)=>{
+app.get("/", (req, res) => {
 
 res.send(
 "Server running successfully"
@@ -239,17 +392,18 @@ res.send(
 
 });
 
+
 /* ===============================
    START SERVER
 =============================== */
 
-const PORT=
-process.env.PORT||3000;
+const PORT =
+process.env.PORT || 3000;
 
-app.listen(PORT,()=>{
+app.listen(PORT, () =>
 
 console.log(
-`Server running on port ${PORT}`
-);
+`🚀 Server running on port ${PORT}`
+)
 
-});
+);
