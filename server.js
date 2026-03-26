@@ -8,100 +8,46 @@ app.use(express.json());
 app.use(cors());
 
 /* ===============================
-   CONFIGURATION
+   CONFIG
 =============================== */
 
-// WhatsApp API
 const API_URL =
 "https://backend.api-wa.co/campaign/neodove/api/v2";
 
-// Your API Key
 const API_KEY =
-"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MTcxNjE0OGQyZDk2MGQzZmVhZjNmMSIsIm5hbWUiOiJCWFEgPD4gTWlnaHR5IEh1bmRyZWQgVGVjaG5vbG9naWVzIFB2dCBMdGQiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjkxNzE2MTQ4ZDJkOTYwZDNmZWFmM2VhIiwiYWN0aXZlUGxhbiI6Ik5PTkUiLCJpYXQiOjE3NjMxMjA2NjB9.8jOtIkz5c455LWioAa7WNzvjXlqCN564TzM12yQQ5Cw";
+"YOUR_API_KEY_HERE";
 
-// Google Sheet Script URL
 const GOOGLE_SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbzP0-EFmdkhRBs9DiT7PJUPHk_qfIR88vPyFl_0VQvcFKc2wsurlbSmNDodpha3JpOy/exec";
-
 
 /* ===============================
    STORAGE
 =============================== */
 
 let otpStore = {};
-
 let deviceStore = {};
-
 
 /* ===============================
    GENERATE OTP
 =============================== */
 
-function generateOTP() {
+function generateOTP(){
 
 return Math.floor(
-100000 + Math.random() * 900000
+100000 + Math.random()*900000
 ).toString();
 
 }
 
-
 /* ===============================
-   CHECK NUMBER
+   SEND OTP (FAST VERSION)
 =============================== */
 
-app.get("/check-number", async (req, res) => {
-
-const phone = req.query.phone;
-
-try {
-
-const response =
-await axios.get(
-GOOGLE_SCRIPT_URL + "?phone=" + phone
-);
-
-if (response.data === "allowed") {
-
-res.json({
-allowed: true
-});
-
-} else {
-
-res.json({
-allowed: false
-});
-
-}
-
-}
-
-catch (error) {
-
-console.error(
-"Sheet error:",
-error.message
-);
-
-res.status(500).json({
-error: "Sheet check failed"
-});
-
-}
-
-});
-
-
-/* ===============================
-   SEND OTP
-=============================== */
-
-app.post("/send-otp", async (req, res) => {
+app.post("/send-otp", async (req,res)=>{
 
 const { phoneNumber } = req.body;
 
-try {
+try{
 
 /* CHECK NUMBER */
 
@@ -111,15 +57,14 @@ GOOGLE_SCRIPT_URL +
 "?phone=" + phoneNumber
 );
 
-if (checkResponse.data !== "allowed") {
+if(checkResponse.data !== "allowed"){
 
 return res.json({
-success: false,
-message: "Login not available"
+success:false,
+message:"Login not available"
 });
 
 }
-
 
 /* GENERATE OTP */
 
@@ -130,305 +75,67 @@ console.log(
 `Generated OTP ${otpCode} for ${phoneNumber}`
 );
 
-
 /* STORE OTP */
 
-otpStore[phoneNumber] = {
+otpStore[phoneNumber]={
 
 otp: otpCode,
-
-expiry:
-Date.now() + 60000
+expiry: Date.now()+60000
 
 };
 
+/* SEND RESPONSE FIRST ⚡ */
 
-/* SEND WHATSAPP */
+res.json({
 
-const payload = {
+success:true,
+message:"OTP sending"
 
-apiKey: API_KEY,
+});
 
-campaignName: "OTP5",
 
-destination: phoneNumber,
+/* SEND WHATSAPP IN BACKGROUND */
 
-userName: "Student",
+const payload={
 
-templateParams: [
+apiKey:API_KEY,
+
+campaignName:"OTP5",
+
+destination:phoneNumber,
+
+userName:"Student",
+
+templateParams:[
 otpCode
 ],
 
-source: "login-system",
-
-media: {},
-
-buttons: [
-
-{
-type: "button",
-sub_type: "url",
-index: 0,
-
-parameters: [
-
-{
-type: "text",
-text: otpCode
-}
-
-]
-
-}
-
-],
-
-carouselCards: [],
-
-location: {},
-
-attributes: {},
-
-paramsFallbackValue: {
-FirstName: "user"
-}
+source:"login-system"
 
 };
 
+/* NO AWAIT HERE ⚡ */
 
-await axios.post(
+axios.post(
 
 API_URL,
 payload,
-
 {
-headers: {
-"Content-Type":
-"application/json"
+headers:{
+"Content-Type":"application/json"
 }
 }
 
-);
+).then(()=>{
 
-res.json({
+console.log("OTP sent successfully");
 
-success: true,
-message: "OTP sent successfully"
-
-});
-
-}
-
-catch (error) {
+}).catch(err=>{
 
 console.error(
-"Error sending OTP:",
-error.response
-? error.response.data
-: error.message
+"OTP send error:",
+err.message
 );
-
-res.status(500).json({
-
-success: false,
-message: "Failed to send OTP"
-
-});
-
-}
-
-});
-
-
-/* ===============================
-   VERIFY OTP + SAVE DEVICE
-=============================== */
-
-app.post("/verify-otp", (req, res) => {
-
-const {
-
-phoneNumber,
-otp,
-deviceId
-
-} = req.body;
-
-const storedData =
-otpStore[phoneNumber];
-
-if (!storedData) {
-
-return res.json({
-
-success: false,
-message: "OTP not found"
-
-});
-
-}
-
-if (
-Date.now() >
-storedData.expiry
-) {
-
-delete otpStore[phoneNumber];
-
-return res.json({
-
-success: false,
-message: "OTP expired"
-
-});
-
-}
-
-if (storedData.otp !== otp) {
-
-return res.json({
-
-success: false,
-message: "Invalid OTP"
-
-});
-
-}
-
-
-/* SAVE DEVICE */
-
-deviceStore[phoneNumber] = {
-
-deviceId: deviceId,
-
-loginTime:
-new Date().toLocaleString(),
-
-userAgent:
-req.headers["user-agent"],
-
-ip:
-req.headers["x-forwarded-for"] ||
-req.socket.remoteAddress
-
-};
-
-
-/* DEVICE TYPE DETECTION */
-
-let agent =
-req.headers["user-agent"];
-
-let deviceType =
-agent.includes("Android")
-? "Android Mobile"
-: agent.includes("iPhone")
-? "iPhone"
-: agent.includes("Windows")
-? "Windows PC"
-: agent.includes("Mac")
-? "Mac"
-: "Unknown Device";
-
-
-/* LOG INFO */
-
-console.log("========== LOGIN ==========");
-
-console.log(
-"Phone:",
-phoneNumber
-);
-
-console.log(
-"Device:",
-deviceType
-);
-
-console.log(
-"Browser:",
-agent
-);
-
-console.log(
-"IP:",
-req.headers["x-forwarded-for"] ||
-req.socket.remoteAddress
-);
-
-console.log(
-"Time:",
-new Date().toLocaleString()
-);
-
-console.log("===========================");
-
-
-/* SUCCESS */
-
-delete otpStore[phoneNumber];
-
-res.json({
-
-success: true,
-message: "Login successful"
-
-});
-
-});
-
-
-/* ===============================
-   CHECK DEVICE (ONE DEVICE LOGIN)
-=============================== */
-
-app.get("/check-device", (req,res)=>{
-
-const phone =
-req.query.phone;
-
-const device =
-req.query.deviceId;
-
-if(deviceStore[phone]?.deviceId !== device){
-
-return res.json({
-
-allowed:false
-
-});
-
-}
-
-res.json({
-
-allowed:true
-
-});
-
-});
-
-
-/* ===============================
-   GET LIVE CLASS FROM SHEET2
-=============================== */
-
-app.get("/get-class", async (req, res) => {
-
-try {
-
-const response =
-await axios.get(
-GOOGLE_SCRIPT_URL
-);
-
-/* RETURNS link FROM Sheet2 */
-
-res.json({
-
-link:
-response.data.link
 
 });
 
@@ -437,13 +144,14 @@ response.data.link
 catch(error){
 
 console.error(
-"Live class sheet error:",
+"Error sending OTP:",
 error.message
 );
 
-res.json({
+res.status(500).json({
 
-link: ""
+success:false,
+message:"Failed to send OTP"
 
 });
 
@@ -451,12 +159,79 @@ link: ""
 
 });
 
-
 /* ===============================
-   ROOT CHECK
+   VERIFY OTP
 =============================== */
 
-app.get("/", (req, res) => {
+app.post("/verify-otp",(req,res)=>{
+
+const {
+phoneNumber,
+otp,
+deviceId
+}=req.body;
+
+const storedData=
+otpStore[phoneNumber];
+
+if(!storedData){
+
+return res.json({
+success:false,
+message:"OTP not found"
+});
+
+}
+
+if(Date.now()>storedData.expiry){
+
+delete otpStore[phoneNumber];
+
+return res.json({
+success:false,
+message:"OTP expired"
+});
+
+}
+
+if(storedData.otp!==otp){
+
+return res.json({
+success:false,
+message:"Invalid OTP"
+});
+
+}
+
+/* SAVE DEVICE */
+
+deviceStore[phoneNumber]={
+
+deviceId:deviceId,
+
+loginTime:
+new Date().toLocaleString()
+
+};
+
+/* SUCCESS */
+
+delete otpStore[phoneNumber];
+
+res.json({
+
+success:true,
+message:"Login successful"
+
+});
+
+});
+
+/* ===============================
+   ROOT
+=============================== */
+
+app.get("/",(req,res)=>{
 
 res.send(
 "Server running successfully"
@@ -464,18 +239,17 @@ res.send(
 
 });
 
-
 /* ===============================
    START SERVER
 =============================== */
 
-const PORT =
-process.env.PORT || 3000;
+const PORT=
+process.env.PORT||3000;
 
-app.listen(PORT, () =>
+app.listen(PORT,()=>{
 
 console.log(
 `Server running on port ${PORT}`
-)
-
 );
+
+});
