@@ -15,9 +15,9 @@ app.use(cors());
 const API_URL =
 "https://backend.api-wa.co/campaign/neodove/api/v2";
 
-// 🔴 PUT YOUR NEW API KEY HERE
+// Your API Key
 const API_KEY =
-"PUT_NEW_API_KEY_HERE";
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MTcxNjE0OGQyZDk2MGQzZmVhZjNmMSIsIm5hbWUiOiJCWFEgPD4gTWlnaHR5IEh1bmRyZWQgVGVjaG5vbG9naWVzIFB2dCBMdGQiLCJhcHBOYW1lIjoiQWlTZW5zeSIsImNsaWVudElkIjoiNjkxNzE2MTQ4ZDJkOTYwZDNmZWFmM2VhIiwiYWN0aXZlUGxhbiI6Ik5PTkUiLCJpYXQiOjE3NjMxMjA2NjB9.8jOtIkz5c455LWioAa7WNzvjXlqCN564TzM12yQQ5Cw";
 
 // Google Sheet Script URL
 const GOOGLE_SCRIPT_URL =
@@ -60,9 +60,19 @@ await axios.get(
 GOOGLE_SCRIPT_URL + "?phone=" + phone
 );
 
+if (response.data === "allowed") {
+
 res.json({
-allowed: response.data === "allowed"
+allowed: true
 });
+
+} else {
+
+res.json({
+allowed: false
+});
+
+}
 
 }
 
@@ -83,7 +93,7 @@ error: "Sheet check failed"
 
 
 /* ===============================
-   SEND OTP (FAST + FIXED)
+   SEND OTP
 =============================== */
 
 app.post("/send-otp", async (req, res) => {
@@ -132,19 +142,7 @@ Date.now() + 60000
 };
 
 
-/* SEND RESPONSE IMMEDIATELY ⚡ */
-
-res.json({
-
-success: true,
-message: "OTP sending"
-
-});
-
-
-/* ===============================
-   SEND WHATSAPP (BACKGROUND)
-=============================== */
+/* SEND WHATSAPP */
 
 const payload = {
 
@@ -160,41 +158,61 @@ templateParams: [
 otpCode
 ],
 
-source: "login-system"
+source: "login-system",
+
+media: {},
+
+buttons: [
+
+{
+type: "button",
+sub_type: "url",
+index: 0,
+
+parameters: [
+
+{
+type: "text",
+text: otpCode
+}
+
+]
+
+}
+
+],
+
+carouselCards: [],
+
+location: {},
+
+attributes: {},
+
+paramsFallbackValue: {
+FirstName: "user"
+}
 
 };
 
 
-/* SEND WITHOUT WAIT ⚡ */
+await axios.post(
 
-axios.post(
 API_URL,
 payload,
+
 {
 headers: {
 "Content-Type":
 "application/json"
 }
 }
-)
 
-.then(response => {
-
-console.log(
-"✅ OTP sent:",
-response.data
 );
 
-})
+res.json({
 
-.catch(error => {
-
-console.error(
-"❌ OTP error:",
-error.response
-? error.response.data
-: error.message
-);
+success: true,
+message: "OTP sent successfully"
 
 });
 
@@ -203,8 +221,10 @@ error.response
 catch (error) {
 
 console.error(
-"Send OTP error:",
-error.message
+"Error sending OTP:",
+error.response
+? error.response.data
+: error.message
 );
 
 res.status(500).json({
@@ -220,7 +240,7 @@ message: "Failed to send OTP"
 
 
 /* ===============================
-   VERIFY OTP
+   VERIFY OTP + SAVE DEVICE
 =============================== */
 
 app.post("/verify-otp", (req, res) => {
@@ -282,21 +302,55 @@ deviceStore[phoneNumber] = {
 deviceId: deviceId,
 
 loginTime:
-new Date().toLocaleString()
+new Date().toLocaleString(),
+
+userAgent:
+req.headers["user-agent"],
+
+ip:
+req.headers["x-forwarded-for"] ||
+req.socket.remoteAddress
 
 };
 
 
-/* LOG LOGIN */
+/* DEVICE TYPE DETECTION */
+
+let agent =
+req.headers["user-agent"];
+
+let deviceType =
+agent.includes("Android")
+? "Android Mobile"
+: agent.includes("iPhone")
+? "iPhone"
+: agent.includes("Windows")
+? "Windows PC"
+: agent.includes("Mac")
+? "Mac"
+: "Unknown Device";
+
+
+/* LOG INFO */
 
 console.log("========== LOGIN ==========");
 
 console.log("Phone:", phoneNumber);
 
-console.log("Device ID:", deviceId);
+console.log("Device:", deviceType);
 
-console.log("Time:",
-new Date().toLocaleString());
+console.log("Browser:", agent);
+
+console.log(
+"IP:",
+req.headers["x-forwarded-for"] ||
+req.socket.remoteAddress
+);
+
+console.log(
+"Time:",
+new Date().toLocaleString()
+);
 
 console.log("===========================");
 
@@ -316,7 +370,7 @@ message: "Login successful"
 
 
 /* ===============================
-   CHECK DEVICE
+   CHECK DEVICE (ONE DEVICE LOGIN)
 =============================== */
 
 app.get("/check-device", (req,res)=>{
@@ -343,7 +397,7 @@ allowed:true
 
 
 /* ===============================
-   GET LIVE CLASS
+   GET LIVE CLASS FROM SHEET2
 =============================== */
 
 app.get("/get-class", async (req, res) => {
@@ -358,7 +412,7 @@ GOOGLE_SCRIPT_URL
 res.json({
 
 link:
-response.data.link || ""
+response.data.link
 
 });
 
@@ -367,12 +421,14 @@ response.data.link || ""
 catch(error){
 
 console.error(
-"Live class error:",
+"Live class sheet error:",
 error.message
 );
 
 res.json({
+
 link: ""
+
 });
 
 }
@@ -403,7 +459,7 @@ process.env.PORT || 3000;
 app.listen(PORT, () =>
 
 console.log(
-`🚀 Server running on port ${PORT}`
+`Server running on port ${PORT}`
 )
 
 );
