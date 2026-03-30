@@ -17,7 +17,32 @@ let activeSessions = {};
 app.get("/", (req, res) => res.status(200).send("Security Server Running"));
 
 /* ===============================
-   SEND OTP (With Logs)
+   ATTENDANCE TRACKING (NEW)
+   Updates Login/Logout in Sheet5
+=============================== */
+app.post("/heartbeat", async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone required" });
+
+    try {
+        // Forward the heartbeat to Google Apps Script
+        const response = await axios.post(GOOGLE_SCRIPT_URL, {
+            phone: phone,
+            action: "heartbeat"
+        });
+
+        // Log heartbeat for monitoring
+        console.log(`[ATTENDANCE PING] Phone: ${phone} | Result: ${response.data} | Time: ${new Date().toLocaleTimeString()}`);
+        
+        res.json({ success: true });
+    } catch (e) {
+        console.error(`[ATTENDANCE ERROR] Phone: ${phone} | Error: ${e.message}`);
+        res.status(500).json({ success: false });
+    }
+});
+
+/* ===============================
+   SEND OTP (Unchanged)
 =============================== */
 app.post("/send-otp", async (req, res) => {
     const { phoneNumber } = req.body;
@@ -30,7 +55,6 @@ app.post("/send-otp", async (req, res) => {
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore[phoneNumber] = { otp: otpCode, expiry: Date.now() + 60000 };
 
-        // LOG: OTP Generation
         console.log(`[OTP SENT] Number: ${phoneNumber} | Code: ${otpCode} | Time: ${new Date().toLocaleString()}`);
 
         const payload = {
@@ -47,7 +71,7 @@ app.post("/send-otp", async (req, res) => {
 });
 
 /* ===============================
-   VERIFY OTP (With Device & IP Logs)
+   VERIFY OTP (Unchanged)
 =============================== */
 app.post("/verify-otp", (req, res) => {
     const { phoneNumber, otp, deviceId } = req.body;
@@ -56,17 +80,14 @@ app.post("/verify-otp", (req, res) => {
     if (stored && stored.otp === otp) {
         activeSessions[phoneNumber] = deviceId; 
 
-        // DEVICE DETECTION
         let agent = req.headers["user-agent"] || "Unknown";
         let deviceType = agent.includes("Android") ? "Android Mobile" : 
                          agent.includes("iPhone") ? "iPhone" : 
                          agent.includes("Windows") ? "Windows PC" : 
                          agent.includes("Mac") ? "Mac" : "Other Device";
 
-        // IP DETECTION
         let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-        // LOG: Full Login Info
         console.log("========== NEW LOGIN ==========");
         console.log(`Phone:    ${phoneNumber}`);
         console.log(`Device:   ${deviceType}`);
@@ -82,7 +103,7 @@ app.post("/verify-otp", (req, res) => {
     }
 });
 
-/* SESSION SECURITY CHECK */
+/* SESSION SECURITY CHECK (Unchanged) */
 app.get("/check-session", (req, res) => {
     const { phone, deviceId } = req.query;
     if (activeSessions[phone] && activeSessions[phone] !== deviceId) {
